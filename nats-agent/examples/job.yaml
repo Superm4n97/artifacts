@@ -1,0 +1,42 @@
+# Publishes 'my-kind: $AGENT_KIND, my-uuid: $AGENT_UUID' to NATS with the agent Secret.
+# Set namespace / secretName to your agent Secret (e.g. cloud-agent-backup in cloud-agents).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nats-agent-publish
+  namespace: cloud-agents
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: publish
+          image: nats:2.12.6-alpine
+          command: ["sh", "-ec"]
+          args:
+            - |
+              case "$(uname -m)" in
+                x86_64) ARCH=amd64 ;;
+                aarch64) ARCH=arm64 ;;
+                *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+              esac
+              wget -qO /tmp/nats-agent \
+                "https://github.com/Superm4n97/helm-artifacts/releases/download/nats-agent/${NATS_AGENT_VERSION}/nats-agent-linux-${ARCH}"
+              chmod +x /tmp/nats-agent
+              /tmp/nats-agent --version
+              exec /tmp/nats-agent publish --secret-dir /etc/nats-agent --subject-suffix "$SUBJECT_SUFFIX"
+          env:
+            - name: NATS_AGENT_VERSION
+              value: v0.1.0
+            - name: SUBJECT_SUFFIX # published to <code>.<suffix>; must be in the agent's grant
+              value: agent.status
+          volumeMounts:
+            - name: nats-agent
+              mountPath: /etc/nats-agent
+              readOnly: true
+      volumes:
+        - name: nats-agent
+          secret:
+            secretName: cloud-agent-backup # <-- your Secret
