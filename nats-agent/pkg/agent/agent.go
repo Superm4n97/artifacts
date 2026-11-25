@@ -5,7 +5,6 @@ package agent
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -113,18 +112,23 @@ func Connect(cfg Config) (*Client, error) {
 func (c *Client) Close() { c.nc.Close() }
 
 type UserInfo struct {
-	Identity     string
-	Code         string
-	PublishAllow []string
+	Identity     string   `json:"user"`
+	PublishAllow []string `json:"-"`
+	Code         string   `json:"-"`
 }
 
-// UserInfo asks the server who this connection is. The code is the first token of the
-// publish grants that are not $SYS subjects.
+// UserInfo asks the server who this connection is.
 func (c *Client) UserInfo() (UserInfo, error) {
 	msg, err := c.nc.Request("$SYS.REQ.USER.INFO", nil, c.timeout)
 	if err != nil {
 		return UserInfo{}, fmt.Errorf("user info: %w", err)
 	}
+	return ParseUserInfo(msg.Data)
+}
+
+// ParseUserInfo parses a $SYS.REQ.USER.INFO answer. The code is the first token of the
+// first publish grant that is not a $SYS subject; it is empty when there is none.
+func ParseUserInfo(data []byte) (UserInfo, error) {
 	var resp struct {
 		Data struct {
 			User        string `json:"user"`
@@ -138,7 +142,7 @@ func (c *Client) UserInfo() (UserInfo, error) {
 			Description string `json:"description"`
 		} `json:"error"`
 	}
-	if err := json.Unmarshal(msg.Data, &resp); err != nil {
+	if err := json.Unmarshal(data, &resp); err != nil {
 		return UserInfo{}, fmt.Errorf("parse user info: %w", err)
 	}
 	if resp.Error != nil {
@@ -146,28 +150,40 @@ func (c *Client) UserInfo() (UserInfo, error) {
 	}
 	info := UserInfo{Identity: resp.Data.User, PublishAllow: resp.Data.Permissions.Publish.Allow}
 	for _, s := range info.PublishAllow {
-		if !strings.HasPrefix(s, "$SYS.") {
+		if s != "" && !strings.HasPrefix(s, "$SYS.") {
 			info.Code = strings.SplitN(s, ".", 2)[0]
 			break
 		}
 	}
-	if info.Code == "" {
-		return info, errors.New("no code in the agent's publish grant")
-	}
 	return info, nil
 }
 
-// Publish sends the message and flushes. A permissions violation arrives before the
-// flush's PONG, so it is reported here.
-func (c *Client) Publish(subject string, data []byte) error {
-	if err := c.nc.Publish(subject, data); err != nil {
-		return fmt.Errorf("publish: %w", err)
+// ServiceError is a refusal from the platform, carried in the reply's
+// Nats-Service-Error-Code and Nats-Service-Error headers.
+type ServiceError struct {
+	Code        string
+	Description string
+}
+
+func (e *ServiceError) Error() string {
+	return fmt.Sprintf("platform refused the event: %s %s", e.Code, e.Description)
+}
+
+// Request sends data with headers on subject and waits for the platform's answer. An
+// answer with Nats-Service-Error-Code is returned as a *ServiceError. A subject outside
+// the grant gets no answer; the server's permissions violation is returned instead of
+// the timeout when it has arrived.
+func (c *Client) Request(subject string, data []byte, header nats.Header) (*nats.Msg, error) {
+	msg := &nats.Msg{Subject: subject, Data: data, Header: header}
+	reply, err := c.nc.RequestMsg(msg, c.timeout)
+	if err != nil {
+		if last := c.nc.LastError(); last != nil {
+			return nil, fmt.Errorf("request %s: %w", subject, last)
+		}
+		return nil, fmt.Errorf("request %s: %w", subject, err)
 	}
-	if err := c.nc.FlushTimeout(c.timeout); err != nil {
-		return fmt.Errorf("flush: %w", err)
+	if code := reply.Header.Get("Nats-Service-Error-Code"); code != "" {
+		return reply, &ServiceError{Code: code, Description: reply.Header.Get("Nats-Service-Error")}
 	}
-	if err := c.nc.LastError(); err != nil {
-		return fmt.Errorf("server: %w", err)
-	}
-	return nil
+	return reply, nil
 }
