@@ -21,76 +21,53 @@ Assets: `nats-agent-{linux,darwin}-{amd64,arm64}` and `SHA256SUMS`.
 
 ## Use
 
-### Global flags
-
-| Flag | Default | Meaning |
-|---|---|---|
-| `--secret-dir` | `/etc/nats-agent` | Directory where the agent Secret is mounted, one file per key. |
-| `--timeout` | `10s` | Connect and request timeout. |
-
-Every command connects the same way: a fresh inbox nkey signs the sentinel JWT, the
-tenant and inbox public key go as user/password, and `NATS_TOKEN` goes as the token.
-`NATS_TOKEN` is re-read from disk on every (re)connect, so a rotated token is picked up.
-If `ca.cert` or `ca.crt` exists it is used as the root CA; otherwise system roots.
-
-### `whoami`
-
-Connects and prints who the server thinks this agent is. Use it to check that the
-Secret works and to see which subjects the agent may publish to before you publish.
-
 ```sh
 nats-agent whoami --secret-dir /etc/nats-agent
+
+nats-agent publish --secret-dir /etc/nats-agent \
+  --backupSessionName bs-1 --backupSessionNamespace demo \
+  --backupConfigurationName bc-1 --phase Succeeded --message 'backup done'
 ```
 
-```
-identity: <user from the auth callout>
-code:     dc-abc123
-publish:  [dc-abc123.> ...]
-```
-
-- `identity`: the user the auth callout assigned.
-- `code`: the agent's subject namespace. Not in the Secret; taken from the first
-  non-`$SYS` publish grant returned by `$SYS.REQ.USER.INFO`.
-- `publish`: the full publish allow list.
-
-### `publish`
-
-Connects, learns the agent's code as `whoami` does, and publishes one message on
-`<code>.<subject-suffix>`. It flushes and checks for a server error, so a permissions
-violation is reported as a failure, not dropped silently.
-
-| Flag | Default | Meaning |
-|---|---|---|
-| `--subject-suffix` | `agent.status` | Subject after the code. Must be inside the agent's publish grant (see `whoami`). |
-| `--message` | `my-kind: <AGENT_KIND>, my-uuid: <AGENT_UUID>` | Raw message body. |
-| `--json` | off | Send a JSON object instead (see below). Cannot be combined with `--message`. |
-
-You only choose the suffix, so a message can never leave the agent's own namespace.
-
-```sh
-# default body on <code>.agent.status
-nats-agent publish --secret-dir /etc/nats-agent
-
-# custom text on <code>.agent.status
-nats-agent publish --subject-suffix agent.status --message 'hello'
-
-# JSON status on <code>.agent.status
-nats-agent publish --json
-```
-
-`--json` body:
+All five `publish` flags are required. It sends this JSON as a request on
+`<code>.<AGENT_KIND>.events` (e.g. `<code>.backup.events`) and waits for the platform's
+answer; a `Nats-Service-Error-Code` in the answer is an error (non-zero exit):
 
 ```json
-{"kind":"<AGENT_KIND>","uuid":"<AGENT_UUID>","tenant":"<NATS_TENANT>","code":"dc-abc123","identity":"<identity>","time":"2026-11-24T10:00:00Z"}
+{
+  "backupSessionName": "bs-1",
+  "backupSessionNamespace": "demo",
+  "backupConfigurationName": "bc-1",
+  "message": "backup done",
+  "phase": "Succeeded",
+  "kind": "backup",
+  "uuid": "<AGENT_UUID>",
+  "time": "2026-11-25T13:00:00Z"
+}
 ```
 
-`--json` sends only non-secret fields; `NATS_TOKEN`, `NATS_SENTINEL` and the CA are never
-included. Do not put them in `--message` either: every subscriber on the subject would
-receive them.
+`<code>` comes from the server's `$SYS.REQ.USER.INFO` answer, or is computed from
+`AGENT_UUID` when the server grants none. The server refuses a subject without the code.
 
-Typical uses: smoke-test the Secret, auth callout and grants end to end; send a
-heartbeat/status from a Job or CronJob. To watch messages arrive, subscribe on the
-backend side, for example `nats sub 'dc-abc123.agent.status'`.
+## Test
+
+```sh
+go test -race ./...
+```
+
+`cmd` tests run the cobra commands against an in-process TLS nats-server.
+
+`e2e` tests build the `nats-agent` binary and run it against an in-process TLS
+nats-server in operator mode with an auth callout. The callout checks what the platform
+checks (the sentinel bearer JWT, the tenant as user, the inbox public key as password
+with the signed nonce, and the token) and grants `<code>.<kind>.events` and
+`$SYS.REQ.USER.INFO`. They cover whoami, a successful publish, the server's code taking
+precedence, a platform refusal (422), publishing outside the grant, no responders,
+rejected credentials, an untrusted CA, and a missing Secret key.
+
+```sh
+go test ./e2e/
+```
 
 ## Release
 

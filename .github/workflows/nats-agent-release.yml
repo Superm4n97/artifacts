@@ -9,7 +9,22 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nats-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: nats-agent/go.mod
+          cache-dependency-path: nats-agent/go.sum
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:

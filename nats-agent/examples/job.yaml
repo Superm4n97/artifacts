@@ -1,4 +1,4 @@
-# Publishes 'my-kind: $AGENT_KIND, my-uuid: $AGENT_UUID' to NATS with the agent Secret.
+# Publishes a backup event on <code>.<AGENT_KIND>.events with the agent Secret.
 # Set namespace / secretName to your agent Secret (e.g. cloud-agent-backup in cloud-agents).
 apiVersion: batch/v1
 kind: Job
@@ -26,12 +26,25 @@ spec:
                 "https://github.com/Superm4n97/helm-artifacts/releases/download/nats-agent/${NATS_AGENT_VERSION}/nats-agent-linux-${ARCH}"
               chmod +x /tmp/nats-agent
               /tmp/nats-agent --version
-              exec /tmp/nats-agent publish --secret-dir /etc/nats-agent --subject-suffix "$SUBJECT_SUFFIX"
+              exec /tmp/nats-agent publish --secret-dir /etc/nats-agent \
+                --backupSessionName "$BACKUP_SESSION_NAME" \
+                --backupSessionNamespace "$BACKUP_SESSION_NAMESPACE" \
+                --backupConfigurationName "$BACKUP_CONFIGURATION_NAME" \
+                --phase "$PHASE" \
+                --message "$MESSAGE"
           env:
             - name: NATS_AGENT_VERSION
               value: v0.1.0
-            - name: SUBJECT_SUFFIX # published to <code>.<suffix>; must be in the agent's grant
-              value: agent.status
+            - name: BACKUP_SESSION_NAME
+              value: bs-1
+            - name: BACKUP_SESSION_NAMESPACE
+              value: demo
+            - name: BACKUP_CONFIGURATION_NAME
+              value: bc-1
+            - name: PHASE
+              value: Succeeded
+            - name: MESSAGE
+              value: backup done
           volumeMounts:
             - name: nats-agent
               mountPath: /etc/nats-agent
