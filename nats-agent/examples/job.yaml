@@ -23,7 +23,7 @@ spec:
                 *) echo "unsupported arch $(uname -m)"; exit 1 ;;
               esac
               wget -qO /tmp/nats-agent \
-                "https://github.com/Superm4n97/helm-artifacts/releases/download/nats-agent/${NATS_AGENT_VERSION}/nats-agent-linux-${ARCH}"
+                "https://github.com/Superm4n97/artifacts/releases/download/${NATS_AGENT_VERSION}/nats-agent-linux-${ARCH}"
               chmod +x /tmp/nats-agent
               /tmp/nats-agent --version
               exec /tmp/nats-agent publish --secret-dir /etc/nats-agent \

@@ -3,7 +3,7 @@ name: nats-agent release
 on:
   push:
     tags:
-      - "nats-agent/v*"
+      - "v*"
 
 permissions:
   contents: write
@@ -20,8 +20,7 @@ jobs:
         with:
           go-version-file: nats-agent/go.mod
           cache-dependency-path: nats-agent/go.sum
-      - run: go vet ./...
-      - run: go test -race -count=1 ./...
+      - run: make test
 
   build:
     needs: test
@@ -45,16 +44,7 @@ jobs:
           cache-dependency-path: nats-agent/go.sum
 
       - name: Build
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
-        run: |
-          VERSION="${GITHUB_REF_NAME#nats-agent/}"
-          mkdir -p dist
-          go build -trimpath \
-            -ldflags "-s -w -X github.com/Superm4n97/helm-artifacts/nats-agent/cmd.Version=${VERSION}" \
-            -o "dist/nats-agent-${GOOS}-${GOARCH}" .
+        run: make build GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} VERSION="${GITHUB_REF_NAME}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -80,5 +70,5 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "nats-agent ${GITHUB_REF_NAME#nats-agent/}" \
+            --title "nats-agent ${GITHUB_REF_NAME}" \
             --generate-notes

@@ -13,7 +13,7 @@ inbox public key as user/password, and the token, all in one CONNECT.
 ```sh
 VERSION=v0.0.1
 curl -fsSL -o nats-agent \
-  "https://github.com/Superm4n97/helm-artifacts/releases/download/nats-agent/${VERSION}/nats-agent-linux-amd64"
+  "https://github.com/Superm4n97/artifacts/releases/download/${VERSION}/nats-agent-linux-amd64"
 chmod +x nats-agent
 ```
 
@@ -71,11 +71,11 @@ go test ./e2e/
 
 ## Release
 
-Push a tag `nats-agent/vX.Y.Z`; `.github/workflows/nats-agent-release.yml` builds the
+Push a tag `vX.Y.Z`; `.github/workflows/nats-agent-release.yml` builds the
 binaries and attaches them to a GitHub release.
 
 ```sh
-git tag nats-agent/v0.0.1 && git push origin nats-agent/v0.0.1
+git tag v0.0.1 && git push origin v0.0.1
 ```
 
 `examples/job.yaml` runs it as a Kubernetes Job on the `nats` image.

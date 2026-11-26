@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Superm4n97/helm-artifacts/nats-agent/pkg/agent"
+	"github.com/Superm4n97/artifacts/nats-agent/pkg/agent"
 )
 
 func newWhoamiCmd() *cobra.Command {

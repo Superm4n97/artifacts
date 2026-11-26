@@ -1,4 +1,4 @@
-module github.com/Superm4n97/helm-artifacts/nats-agent
+module github.com/Superm4n97/artifacts/nats-agent
 
 go 1.25.0
 

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/Superm4n97/helm-artifacts/nats-agent/cmd"
+	"github.com/Superm4n97/artifacts/nats-agent/cmd"
 )
 
 func main() {

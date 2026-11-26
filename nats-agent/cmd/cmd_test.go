@@ -23,8 +23,8 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 
-	"github.com/Superm4n97/helm-artifacts/nats-agent/pkg/agent"
-	"github.com/Superm4n97/helm-artifacts/nats-agent/pkg/event"
+	"github.com/Superm4n97/artifacts/nats-agent/pkg/agent"
+	"github.com/Superm4n97/artifacts/nats-agent/pkg/event"
 )
 
 const (
